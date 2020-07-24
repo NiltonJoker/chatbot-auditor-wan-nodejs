@@ -160,6 +160,8 @@ async function handleDialogFlowAction(
       cuestionarios.forEach((cuestionario) => {
         msg += `<b>${cuestionario.id}.-</b> ${cuestionario.nombre}\n`;
       });
+      let unamImage = "https://4.bp.blogspot.com/-ZBO0nE5TcMY/XLT-jGH8SXI/AAAAAAABOyQ/boKqBeTuAS0kDwRfIFxccam4js0V8mjHQCLcBGAs/s1600/universidad-nacional-de-moquegua-logo.jpg"
+      await sendImageMessage(sender, unamImage)
       await sendTextMessage(sender, msg);
       await sendTextMessage(
         sender,
