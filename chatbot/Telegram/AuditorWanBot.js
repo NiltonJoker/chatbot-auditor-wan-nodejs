@@ -7,6 +7,11 @@ const { structProtoToJson } = require("../helpers/structFunctions");
 // Funciones de la base de datos
 const areasService = require("../../db/Areas");
 const areaObjetivosService = require("../../db/AreaObjetivos");
+const cuestionariosService = require("../../db/Cuestionarios");
+const auditoriasService = require("../../db/Auditorias");
+const preguntasService = require("../../db/Preguntas");
+const respuestasService = require("../../db/Respuestas");
+const detalleAuditoriasService = require("../../db/Detalle_auditorias");
 
 const users = [];
 
@@ -105,25 +110,34 @@ async function handleDialogFlowAction(
       await sendToDialogFlow(sender, "AreaObjetivos " + id_area); //empezamos con la pregunta 1
       break;
     case "AreaObjetivos.action":
-      await handleMessage(messages,sender);
-      msg= "";
+      await handleMessage(messages, sender);
+      msg = "";
       id_area = contexts[0].parameters.fields.id_area.numberValue;
       console.log("el id de el area es :", id_area);
       areaObjetivos = await areaObjetivosService.list(id_area);
       areaObjetivos.forEach((areaObjetivo, index) => {
-        msg += `<b>${index+1}.-</b> ${areaObjetivo.objetivo}\n`;
-      })
-      await sendTextMessage(sender, `Esta área tiene ${areaObjetivos.length} objetivos específicios de la auditoría`);
-      await sendTextMessage(sender, "Los objetivos específicos de la Auditoria del área elegida son: \n");
-      await sendTextMessage(sender,msg);
+        msg += `<b>${index + 1}.-</b> ${areaObjetivo.objetivo}\n`;
+      });
+      await sendTextMessage(
+        sender,
+        `Esta área tiene ${areaObjetivos.length} objetivos específicios de la auditoría`
+      );
+      await sendTextMessage(
+        sender,
+        "Los objetivos específicos de la Auditoria del área elegida son: \n"
+      );
+      await sendTextMessage(sender, msg);
       break;
     case "Auditoria.action":
       await handleMessage(messages, sender);
-      msg=""
-      let objetivos = [{nombre: "Objetivos Generales"}, {nombre: "Objetivos Específicos"}];
+      msg = "";
+      let objetivos = [
+        { nombre: "Objetivos Generales" },
+        { nombre: "Objetivos Específicos" },
+      ];
       objetivos.forEach((objetivo, index) => {
-        msg += `<b>${index+1}.-</b> ${objetivo.nombre}\n`;
-      })
+        msg += `<b>${index + 1}.-</b> ${objetivo.nombre}\n`;
+      });
       await sendTextMessage(sender, "<b>Objetivos:</b>\n");
       await sendTextMessage(sender, msg);
       await sendTextMessage(
@@ -134,8 +148,135 @@ async function handleDialogFlowAction(
     case "ObjetivosAuditoria.action":
       await handleMessages(messages, sender);
       objetivo = parameters.fields.numero.numberValue;
-      objetivo==1 ? await sendToDialogFlow(sender, "EmpezarObjetivos " + objetivo) : await sendToDialogFlow(sender, "ListarAreas");
+      objetivo == 1
+        ? await sendToDialogFlow(sender, "EmpezarObjetivos " + objetivo)
+        : await sendToDialogFlow(sender, "ListarAreas");
       // await sendToDialogFlow(sender, "EmpezarObjetivos " + id_auditoria); //empezamos con la pregunta 1
+      break;
+    case "ListadoCuestionarios.action":
+      await handleMessages(messages, sender);
+      msg = "";
+      let cuestionarios = await cuestionariosService.list();
+      cuestionarios.forEach((cuestionario) => {
+        msg += `<b>${cuestionario.id}.-</b> ${cuestionario.nombre}\n`;
+      });
+      await sendTextMessage(sender, msg);
+      await sendTextMessage(
+        sender,
+        "Por favor, indícame el número del cuestionario para comenzar..."
+      );
+      break;
+    case "SeleccionCuestionario.action":
+      await handleMessages(messages, sender);
+      id_cuestionario = parameters.fields.id_cuestionario.numberValue;
+      id_auditoria = (await auditoriasService.create(id_cuestionario))[0].id;
+      await sendToDialogFlow(sender, "EmpezarCuestionario " + id_auditoria); //empezamos con la pregunta 1
+      break;
+    case "EmpezarCuestionario.action":
+      await handleMessages(messages, sender);
+      id_cuestionario =
+        contexts[0].parameters.fields.id_cuestionario.numberValue;
+      id_auditoria = parameters.fields.id_auditoria.numberValue;
+      console.log("el id de la auditoria: ", id_auditoria);
+      //empezando cuestionario
+      preguntas = await preguntasService.listByCuestionarioId(id_cuestionario);
+      await sendTextMessage(
+        sender,
+        `*Consta de ${preguntas.length} preguntas:.`
+      );
+      await sendToDialogFlow(sender, "pregunta 1"); //empezamos con la pregunta 1
+      break;
+    case "Pregunta-cuestionario.action":
+      id_cuestionario =
+        contexts[0].parameters.fields.id_cuestionario.numberValue;
+      ordenPregunta = parameters.fields.orden.numberValue;
+      //empezando cuestionario
+      preguntas = await preguntasService.listByOrder(
+        id_cuestionario,
+        ordenPregunta
+      );
+      if (preguntas.length > 0) {
+        msg += `<b>Pregunta ${ordenPregunta}.-</b> ${preguntas[0].pregunta}`;
+        await sendTextMessage(sender, msg);
+        let replies = [
+          {
+            text: "Si",
+            callback_data: "Si",
+          },
+          {
+            text: "No",
+            callback_data: "No",
+          },
+          {
+            text: "N/A",
+            callback_data: "N/A",
+          },
+        ];
+        await sendQuickReply(sender, "<b>¿Cumple?</b>", replies);
+      } else {
+        await sendTextMessage(
+          sender,
+          "El cuestionario ha terminado. Ahora puedes generar reportes con los datos recolectados..."
+        );
+      }
+
+      //
+      break;
+    case "Respuesta-pregunta.action":
+      var ordenPreguntaActual = contexts[0].parameters.fields.orden.numberValue;
+      var respuesta = parameters.fields.respuesta.stringValue;
+      console.log("el valor de respuesta: ", respuesta);
+      if (respuesta == "No" || respuesta == "N/A") {
+        sendToDialogFlow(sender, "activarObservacion");
+      } else {
+        //creando registro en bd de pregunta-respuesta
+        id_cuestionario =
+          contexts[0].parameters.fields.id_cuestionario.numberValue;
+        id_pregunta = (
+          await preguntasService.listByOrder(
+            id_cuestionario,
+            ordenPreguntaActual
+          )
+        )[0].id;
+        id_ultima_respuesta = (await respuestasService.create(respuesta))[0].id;
+        id_auditoria = contexts[0].parameters.fields.id_auditoria.numberValue;
+        detalleAuditoriasService.create(
+          id_auditoria,
+          id_pregunta,
+          id_ultima_respuesta
+        );
+        await sendTextMessage(sender, "Respuesta guardada en bd: " + respuesta);
+        sendToDialogFlow(sender, `pregunta ${ordenPreguntaActual + 1}`);
+      }
+      break;
+    case "Observacion-pregunta.action":
+      handleMessages(messages, sender);
+      let observacion = parameters.fields.observacion.stringValue;
+      if (isDefined(observacion)) {
+        var respuesta = contexts[1].parameters.fields.respuesta.stringValue;
+        var ordenPreguntaActual =
+          contexts[1].parameters.fields.orden.numberValue;
+        id_ultima_respuesta = (
+          await respuestasService.create(respuesta, observacion)
+        )[0].id;
+        //creando registro en bd de pregunta-respuesta
+        id_cuestionario =
+          contexts[1].parameters.fields.id_cuestionario.numberValue;
+        id_pregunta = (
+          await preguntasService.listByOrder(
+            id_cuestionario,
+            ordenPreguntaActual
+          )
+        )[0].id;
+        id_auditoria = contexts[1].parameters.fields.id_auditoria.numberValue;
+        detalleAuditoriasService.create(
+          id_auditoria,
+          id_pregunta,
+          id_ultima_respuesta
+        );
+        await sendTextMessage(sender, "Guardado en base de datos... ");
+        sendToDialogFlow(sender, `pregunta ${ordenPreguntaActual + 1}`);
+      }
       break;
     default:
       console.log(
@@ -171,6 +312,24 @@ async function handleMessage(message, sender) {
           await sendTextMessage(sender, text);
         }
       }
+      break;
+    case "quickReplies": //quick replies
+      let title = message.quickReplies.title;
+      console.log("el titulo es:", title);
+      let replies = [];
+      message.quickReplies.quickReplies.forEach((text) => {
+        replies.push({
+          text: text,
+          callback_data: text,
+        });
+      });
+      sendQuickReply(sender, title, replies);
+      break;
+    case "image": //image
+      await sendImageMessage(sender, message.image.imageUri);
+      break;
+    case "payload":
+      handleDialogflowPayload(sender, message.payload);
       break;
   }
 }
@@ -212,6 +371,75 @@ let sendTextMessage = async (senderID, message) => {
     parse_mode: "HTML",
   });
 };
+async function sendButtons(senderID, title, buttons) {
+  await bot.sendMessage(senderID, title, {
+    reply_markup: {
+      inline_keyboard: [buttons],
+      resize_keyboard: true,
+    },
+    parse_mode: "HTML",
+  });
+}
+
+async function sendQuickReply(senderID, title, replies) {
+  await bot.sendMessage(senderID, title, {
+    parse_mode: "html",
+    reply_markup: {
+      inline_keyboard: [replies],
+      resize_keyboard: true,
+    },
+  });
+}
+
+async function sendImageMessage(senderID, url) {
+  await bot.sendChatAction(senderID, "upload_photo");
+  await bot.sendPhoto(senderID, url);
+}
+async function handleCardMessages(messages, senderID) {
+  console.log(
+    "se recibio esto en handleCardMessages: ",
+    JSON.stringify(messages, null, " ")
+  );
+  for (let m = 0; m < messages.length; m++) {
+    let message = messages[m];
+    let buttons = [];
+    for (var b = 0; b < message.card.buttons.length; b++) {
+      let isLink = message.card.buttons[b].postback.substring(0, 4) === "http";
+      let button;
+      if (isLink) {
+        button = {
+          text: message.card.buttons[b].text,
+          url: message.card.buttons[b].postback,
+        };
+      } else {
+        button = {
+          text: message.card.buttons[b].text,
+          callback_data: message.card.buttons[b].postback,
+        };
+      }
+      buttons.push(button);
+    }
+
+    let element = {
+      title: message.card.title,
+      image_url: message.card.imageUri,
+      subtitle: message.card.subtitle || " ",
+      buttons: buttons,
+    };
+    console.log("el elemento queda asi: ", element);
+    await sendGenericMessage(senderID, element);
+  }
+}
+
+async function sendGenericMessage(senderID, element) {
+  await sendImageMessage(senderID, element.image_url);
+  // await sendTextMessage(senderID, `<b>${element.title}</b>`);
+  await sendButtons(
+    senderID,
+    "<b>" + element.title + "</b>" + "\n" + element.subtitle,
+    element.buttons
+  );
+}
 
 function isDefined(obj) {
   if (obj === undefined) {
