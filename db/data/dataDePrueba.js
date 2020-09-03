@@ -2,13 +2,9 @@ const db = require("..");
 process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
 //Datos de ejemplo para el chatbot auditor - Poblado de tablas cuestionarios y preguntas
 
-let areas = [
-  "Red Wan",
-  "Hardware",
-  "Software",
-  "Red Física y Lógica",
-  "Plan de contingencia",
-];
+// let areas = [
+//   "Software"
+// ];
 
 let areaObjetivos = [
   {
@@ -106,16 +102,15 @@ let areaObjetivos = [
   },
 ];
 
-// let cuestionarios = ["Cuestionario de Generalidades de la empresa",];
+// let cuestionarios = ["Cuestionario de Software"];
 let preguntas = [
-  "¿Cuál es la actividad de la empresa?",
-  "¿Existe un organigrama en la empresa?",
-  "¿Cuenta la empresa con misión, visión y valores?",
-  "¿Existen objetivos establecidos en la empresa?",
-  "¿Cuentan con presupuestos y manuales?",
-  "¿Cuentan con planes educativos?",
-  "¿Posee la empresa un manual de funciones específicas para cada área de trabajo?",
-  "¿Existe un control de ingresos y egresos?",
+  "¿Existe un informe técnico en el que se justifique la adquirió del software, incluyendo une estudio coste-beneficio?",
+  "¿Existe un comité que coordine y se responsabilice de todo el proceso de adquisición?",
+  "¿Se han implantado claves o password para garantizar operación de consola y equipo central, a personal autorizado?",
+  "¿Las actividades del centro de cómputo están normadas por manuales, normas o reglamentos?",
+  "¿Existen políticas a la hora de adquirir nuevos equipos?",
+  "¿Poseen manuales de uso?",
+  "¿Los manuales están actualizados?"
 ];
 
 // cuestionarios.forEach((cuestionario) => {
@@ -134,7 +129,7 @@ preguntas.forEach((pregunta, index) => {
   db.query(
     `insert into preguntas (pregunta,orden,id_cuestionario) values('${pregunta}', ${
       index + 1
-    }, 4)`,
+    }, 5)`,
     (err, res) => {
       if (err) {
         return console.log(err);
